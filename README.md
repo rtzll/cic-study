@@ -103,6 +103,9 @@ _Note_: not each progress change shows up on every run (despite 1ms polling).
 
 ### Index Creation Phases (`pg_stat_progress_create_index.phase`)
 
+_Note_: the phases listed are those observed. A full list can be found in the
+[postgres docs](https://www.postgresql.org/docs/current/progress-reporting.html#CREATE-INDEX-PHASES).
+
 1. `building index: scanning table`
 2. `building index: sorting live tuples`
 3. `building index: loading tuples in tree`
