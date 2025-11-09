@@ -97,7 +97,7 @@ _Note_: not each progress change shows up on every run (despite 1ms polling).
 
 10. `idx ready=true valid=false progress=<inactive>`
 
-The CIC session finished but `indisvalid` hasn’t flipped yet.
+   The CIC session finished but `indisvalid` hasn’t flipped yet.
 
 ## Example Output of `validation-phase` Run
 
