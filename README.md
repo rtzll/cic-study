@@ -15,14 +15,16 @@ timestamped relative to each scenario to compare durations linearly.
   (`before-catalog`), it builds the index outright while holding the usual
   `RowExclusiveLock`; CIC wakes up, sees a ready+valid index, and exits
   immediately.
-- As soon as the catalog row exists but CIC is still building or validating
-  (`exists-not-ready`, `ready-not-valid`, `validation-phase`), overlapping
-  creation almost always trips Postgres’ deadlock detector. In **most** of runs
-  the database cancels the concurrent build and lets the non-concurrent build
-  finish; on rare runs the cancellation flips the other way.
-- Very occasionally the `ready-not-valid` or `validation-phase` overlaps
-  complete without error, but the common outcome remains a deadlock cancellation
-  once both builders contend for the same locks.
+- As soon as the catalog row exists but CIC is still building or waiting to
+  validate (`exists-not-ready`, `ready-not-valid`), overlapping creation almost
+  always trips Postgres’ deadlock detector. In **most** runs the database
+  cancels the concurrent build and lets the non-concurrent build finish; on rare
+  runs the cancellation flips the other way.
+- When we wait until CIC is actively inside the validation phase (scenario
+  `validation-phase` the IF NOT EXISTS call now succeeds most of the time
+  because the concurrent session already holds the heavier locks it needs.
+  Deadlocks can still happen, but they are now the exception rather than the
+  rule.
 
 ## Scenarios
 
@@ -110,53 +112,53 @@ _Note_: not each progress change shows up on every run (despite 1ms polling).
 7. `index validation: scanning table`
 8. `waiting for old snapshots`
 
-## Example Output of `validation-phase` Run
+## Example Output of `ready-not-valid` Run
 
 ```
-[+0.0000s] ==== Scenario 5: state: validation phase before commit ====
-[+0.0000s] [validation-phase] starting Postgres 16.8 container
-[+1.5133s] [validation-phase] Postgres up at postgres://u:pw@localhost:33201/db?sslmode=disable
-[+1.5221s] [validation-phase] creating table t
-[+2.6346s] [validation-phase] seed of 1000000 rows completed in 1110.36 ms
-[+2.6346s] [validation-phase] launching CREATE INDEX CONCURRENTLY in background
-[+2.6346s] [validation-phase] waiting for catalog entry that is ready and valid (but CIC not committed)
-[+2.6448s] [probe] started
-[+2.6456s] [probe] insert #01 completed after 0.75 ms
-[+2.6461s] [cic] started
-[+2.6485s] [cic] snapshot updated: idx=<missing> progress=building index: scanning table
-[+2.6492s] [writers] started
-[+2.6493s] [cic] snapshot updated: idx ready=false valid=false progress=building index: scanning table
-[+2.6874s] [cic] snapshot updated: idx ready=false valid=false progress=building index: sorting live tuples
-[+2.7455s] [probe] insert #02 completed after 0.56 ms
-[+2.8452s] [probe] insert #03 completed after 0.28 ms
-[+2.9454s] [probe] insert #04 completed after 0.45 ms
-[+3.0453s] [probe] insert #05 completed after 0.36 ms
-[+3.1453s] [probe] insert #06 completed after 0.43 ms
-[+3.2452s] [probe] insert #07 completed after 0.31 ms
-[+3.3454s] [probe] insert #08 completed after 0.49 ms
-[+3.4453s] [probe] insert #09 completed after 0.41 ms
-[+3.5453s] [probe] insert #10 completed after 0.38 ms
-[+3.6517s] [probe] insert #11 completed after 1.15 ms
-[+3.7458s] [probe] insert #12 completed after 0.87 ms
-[+3.7587s] [cic] snapshot updated: idx ready=false valid=false progress=building index: loading tuples in tree
-[+3.8556s] [probe] insert #13 completed after 10.71 ms
-[+3.9468s] [probe] insert #14 completed after 1.85 ms
-[+3.9573s] [cic] snapshot updated: idx ready=true valid=false progress=waiting for writers before validation
-[+3.9573s] [validation-phase] IF NOT EXISTS trigger: idx ready=true valid=false
-[+3.9573s] [validation-phase] starting non-concurrent CREATE INDEX IF NOT EXISTS idx
-[+3.9596s] [validation-phase] locks before non-concurrent build: RowExclusiveLock, ShareUpdateExclusiveLock
-[+3.9845s] [cic] snapshot updated: idx ready=true valid=false progress=index validation: scanning index
-[+4.0084s] [cic] snapshot updated: idx ready=true valid=false progress=index validation: sorting tuples
-[+4.0483s] [cic] snapshot updated: idx ready=true valid=false progress=index validation: scanning table
-[+4.0765s] [cic] snapshot updated: idx ready=true valid=false progress=waiting for old snapshots
-[+5.0529s] [probe] insert #15 completed after 1007.97 ms
-[+6.0587s] [cic] failed after 3411.82 ms: ERROR: deadlock detected (SQLSTATE 40P01)
-[+6.0641s] [probe] insert #16 completed after 1011.18 ms
-[+6.0645s] [validation-phase] non-concurrent build finished in 2104.78 ms
-[+6.0672s] [probe] insert #17 completed after 3.03 ms
-[+6.0675s] [validation-phase] locks after non-concurrent build: RowExclusiveLock
-[+6.0682s] [cic] snapshot updated: idx ready=true valid=false progress=<inactive>
-[+6.0682s] [probe] stopping
-[+6.0682s] [writers] stopping
-[+6.3459s] [validation-phase] finished with error: ERROR: deadlock detected (SQLSTATE 40P01)
+[+0.0000s] ==== Scenario 4: state: ready but not valid ====
+[+0.0000s] [ready-not-valid] starting Postgres 16.8 container
+[+1.8921s] [ready-not-valid] Postgres up at postgres://u:pw@localhost:33221/db?sslmode=disable
+[+1.9036s] [ready-not-valid] creating table t
+[+3.1639s] [ready-not-valid] seed of 1000000 rows completed in 1257.20 ms
+[+3.1640s] [ready-not-valid] launching CREATE INDEX CONCURRENTLY in background
+[+3.1640s] [ready-not-valid] waiting for catalog entry that is ready but not yet valid
+[+3.1708s] [cic] started
+[+3.1713s] [writers] started
+[+3.1715s] [probe] started
+[+3.1720s] [probe] insert #01 completed after 0.52 ms
+[+3.1728s] [cic] snapshot updated: idx ready=false valid=false progress=building index: scanning table
+[+3.2166s] [cic] snapshot updated: idx ready=false valid=false progress=building index: sorting live tuples
+[+3.2724s] [probe] insert #02 completed after 0.92 ms
+[+3.3721s] [probe] insert #03 completed after 0.46 ms
+[+3.4720s] [probe] insert #04 completed after 0.37 ms
+[+3.5746s] [probe] insert #05 completed after 0.58 ms
+[+3.6719s] [probe] insert #06 completed after 0.39 ms
+[+3.7724s] [probe] insert #07 completed after 0.86 ms
+[+3.8738s] [probe] insert #08 completed after 0.95 ms
+[+3.9720s] [probe] insert #09 completed after 0.37 ms
+[+4.0719s] [probe] insert #10 completed after 0.39 ms
+[+4.1718s] [probe] insert #11 completed after 0.32 ms
+[+4.2726s] [probe] insert #12 completed after 1.05 ms
+[+4.3287s] [cic] snapshot updated: idx ready=false valid=false progress=building index: loading tuples in tree
+[+4.3748s] [probe] insert #13 completed after 2.84 ms
+[+4.4740s] [probe] insert #14 completed after 2.36 ms
+[+4.5398s] [cic] snapshot updated: idx ready=false valid=false progress=waiting for writers before validation
+[+4.5418s] [cic] snapshot updated: idx ready=true valid=false progress=waiting for writers before validation
+[+4.5418s] [ready-not-valid] IF NOT EXISTS trigger: idx ready=true valid=false
+[+4.5418s] [ready-not-valid] starting non-concurrent CREATE INDEX IF NOT EXISTS idx
+[+4.5437s] [ready-not-valid] locks before non-concurrent build: RowExclusiveLock, ShareUpdateExclusiveLock
+[+4.5628s] [cic] snapshot updated: idx ready=true valid=false progress=index validation: scanning index
+[+4.5878s] [cic] snapshot updated: idx ready=true valid=false progress=index validation: sorting tuples
+[+4.6282s] [cic] snapshot updated: idx ready=true valid=false progress=index validation: scanning table
+[+4.6556s] [cic] snapshot updated: idx ready=true valid=false progress=waiting for old snapshots
+[+5.5510s] [probe] insert #15 completed after 979.40 ms
+[+6.5768s] [ready-not-valid] non-concurrent build finished in 2033.05 ms
+[+6.5772s] [cic] failed after 3406.35 ms: ERROR: deadlock detected (SQLSTATE 40P01)
+[+6.5821s] [probe] insert #16 completed after 1031.03 ms
+[+6.5875s] [probe] insert #17 completed after 5.40 ms
+[+6.5876s] [ready-not-valid] locks after non-concurrent build: RowExclusiveLock
+[+6.5899s] [cic] snapshot updated: idx ready=true valid=false progress=<inactive>
+[+6.6009s] [probe] stopping
+[+6.6011s] [writers] stopping
+[+6.8658s] [ready-not-valid] finished with error: ERROR: deadlock detected (SQLSTATE 40P01)
 ```

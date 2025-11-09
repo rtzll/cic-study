@@ -262,10 +262,7 @@ func runOverlapScenario(ctx context.Context, label string, trigger overlapTrigge
 			log.Printf("%s waiting for catalog entry that is ready and valid (but CIC not committed)", prefix)
 			snap, err := waitForCICEvent(events, cicStateTimeout, func(s indexSnapshot) bool {
 				// -> SUCCESS (most of the time)
-				// return s.progressActive && strings.Contains(s.progressPhase, "index validation")
-				// -> ERROR: deadlock detected -> cancel CIC (most of the time)
-				// sometimes passes without ERROR
-				return s.progressActive && strings.Contains(s.progressPhase, "validation")
+				return s.progressActive && strings.Contains(s.progressPhase, "index validation")
 			})
 			if err != nil {
 				return fmt.Errorf("%s wait for ready+valid index: %w", prefix, err)
