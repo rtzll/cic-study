@@ -40,40 +40,64 @@ Run `go run . [scenario-key]` to focus on a subset; omit args to execute all.
 
 ### Non-concurrent Starts First (`before-catalog`)
 
-1. `idx=<missing> progress=building index: scanning table` - the concurrent
-   worker starts, but still reports the index as missing while it parses and
-   scans the table.
-2. `idx=<missing> progress=building index: sorting live tuples` - the concurrent
-   worker advances to sorting while the non-concurrent build continues to hold
-   the lead.
-3. `idx ready=true valid=true progress=<inactive>` - the concurrent session
-   wakes up, notices the index is already valid, and exits without entering the
-   validation phase.
+1. `idx=<missing> progress=building index: scanning table`
+
+   The concurrent worker starts, but still reports the index as missing while it
+   parses and scans the table.
+
+2. `idx=<missing> progress=building index: sorting live tuples`
+
+   The concurrent worker advances to sorting while the non-concurrent build
+   continues to hold the lead.
+
+3. `idx ready=true valid=true progress=<inactive>`
+
+   The concurrent session wakes up, notices the index is already valid, and
+   exits without entering the validation phase.
 
 ### CIC Starts First
 
 _Note_: not each progress change shows up on every run (despite 1ms polling).
 
-0. `idx=<missing> progress=building index: scanning table` - no catalog row yet;
-   CIC is still parsing/scanning.
-1. `idx ready=false valid=false progress=building index: scanning table` -
-   catalog entry exists but the scan is ongoing.
-2. `idx ready=false valid=false progress=building index: sorting live tuples` -
-   scan complete; tuples being sorted.
-3. `idx ready=false valid=false progress=building index: loading tuples in tree` -
-   sorted tuples inserted into the index structure.
-4. `idx ready=true valid=false progress=waiting for writers before validation` -
-   build phase done; waiting to start validation while writers drain.
-5. `idx ready=true valid=false progress=index validation: scanning index` -
-   validation begins by scanning the new index.
-6. `idx ready=true valid=false progress=index validation: sorting tuples` -
-   validation sorts tuples for comparison.
-7. `idx ready=true valid=false progress=index validation: scanning table` -
-   validation cross-checks rows against the table.
-8. `idx ready=true valid=false progress=waiting for old snapshots` - validation
-   done; waiting for old snapshots before commit.
-9. `idx ready=true valid=false progress=<inactive>` - CIC session finished but
-   `indisvalid` hasn’t flipped yet.
+1. `idx=<missing> progress=building index: scanning table`
+
+   No catalog row yet; CIC is still parsing/scanning.
+
+2. `idx ready=false valid=false progress=building index: scanning table`
+
+   A catalog entry exists but the scan is ongoing.
+
+3. `idx ready=false valid=false progress=building index: sorting live tuples`
+
+   Scan completed; tuples are being sorted.
+
+4. `idx ready=false valid=false progress=building index: loading tuples in tree`
+
+   Sorted tuples are inserted into the index structure.
+
+5. `idx ready=true valid=false progress=waiting for writers before validation`
+
+   Build phase is done; waiting to start validation while writers drain.
+
+6. `idx ready=true valid=false progress=index validation: scanning index`
+
+   Validation begins by scanning the new index.
+
+7. `idx ready=true valid=false progress=index validation: sorting tuples`
+
+   Validation sorts tuples for comparison.
+
+8. `idx ready=true valid=false progress=index validation: scanning table`
+
+   Validation cross-checks rows against the table.
+
+9. `idx ready=true valid=false progress=waiting for old snapshots`
+
+   Validation is done; waiting for old snapshots before commit.
+
+10. `idx ready=true valid=false progress=<inactive>`
+
+The CIC session finished but `indisvalid` hasn’t flipped yet.
 
 ## Example Output of `validation-phase` Run
 
