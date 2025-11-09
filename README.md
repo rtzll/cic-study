@@ -99,6 +99,17 @@ _Note_: not each progress change shows up on every run (despite 1ms polling).
 
    The CIC session finished but `indisvalid` hasn’t flipped yet.
 
+### Index Creation Phases (`pg_stat_progress_create_index.phase`)
+
+1. `building index: scanning table`
+2. `building index: sorting live tuples`
+3. `building index: loading tuples in tree`
+4. `waiting for writers before validation`
+5. `index validation: scanning index`
+6. `index validation: sorting tuples`
+7. `index validation: scanning table`
+8. `waiting for old snapshots`
+
 ## Example Output of `validation-phase` Run
 
 ```
