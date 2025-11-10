@@ -63,50 +63,49 @@ _Note_: not each progress change shows up on every run (despite 1ms polling).
 
 1. `idx=<missing> progress=building index: scanning table`
 
-   No catalog row yet; CIC is still parsing/scanning.
+   Catalog entry not written yet; CIC is still parsing and scanning.
 
 2. `idx ready=false valid=false progress=building index: scanning table`
 
-   A catalog entry exists but the scan is ongoing.
+   Catalog entry exists but the scan is still running.
 
 3. `idx ready=false valid=false progress=building index: sorting live tuples`
 
-   Scan completed; tuples are being sorted.
+   Scan finished; tuples are being sorted.
 
 4. `idx ready=false valid=false progress=building index: loading tuples in tree`
 
-   Sorted tuples are inserted into the index structure.
+   Sorted tuples are being inserted into the index structure.
 
 5. `idx ready=true valid=false progress=waiting for writers before validation`
 
-   Build phase is done; waiting to start validation while writers drain.
+   Build work is done; waiting for writer transactions to drain.
 
 6. `idx ready=true valid=false progress=index validation: scanning index`
 
-   Validation begins by scanning the new index.
+   Validation starts by scanning the new index.
 
 7. `idx ready=true valid=false progress=index validation: sorting tuples`
 
-   Validation sorts tuples for comparison.
+   Validation sorts the candidate tuples for comparison.
 
 8. `idx ready=true valid=false progress=index validation: scanning table`
 
-   Validation cross-checks rows against the table.
+   Validation scans the table to cross-check tuples.
 
 9. `idx ready=true valid=false progress=waiting for old snapshots`
 
-   Validation is done; waiting for old snapshots before commit.
+   Waiting for old snapshots to fall away before commit.
 
 10. `idx ready=true valid=false progress=<inactive>`
 
-    `pg_stat_progress_create_index` drops the entry (so we render `<inactive>`),
-    but the concurrent transaction hasn’t committed, so `indisvalid` still reads
-    false until the final catalog update happens.
+    The progress row disappears (`<inactive>`), but the transaction hasn’t
+    committed yet so `indisvalid` remains false.
 
 11. `idx ready=true valid=true progress=<inactive>`
 
-    The catalog row now reports both flags true, confirming the concurrent build
-    committed cleanly right after the IF NOT EXISTS call released its locks.
+    The catalog entry now reports ready+valid, meaning the transaction committed
+    and the index is fully usable.
 
 ### Index Creation Phases (`pg_stat_progress_create_index.phase`)
 
