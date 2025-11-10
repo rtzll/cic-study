@@ -7,9 +7,11 @@ import (
 	"io"
 	"log"
 	"os"
+	"os/signal"
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -36,7 +38,8 @@ func main() {
 	log.SetPrefix("")
 	log.SetOutput(&relativeWriter{clock: scenarioClock, out: os.Stderr})
 
-	ctx := context.Background()
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
 	scenarios := []scenario{
 		{key: "sequential", name: "sequential: fully ready + valid", run: runSequentialScenario},
 		{key: "before-catalog", name: "state: before catalog entry", run: runOverlapBeforeCatalogScenario},
@@ -47,6 +50,10 @@ func main() {
 
 	targets := selectScenarioIndexes(os.Args[1:], scenarios)
 	for _, idx := range targets {
+		if err := ctx.Err(); err != nil {
+			log.Printf("context canceled, stopping remaining scenarios: %v", err)
+			return
+		}
 		sc := scenarios[idx]
 		if idx != 0 {
 			fmt.Println()
