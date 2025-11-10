@@ -56,7 +56,7 @@ func main() {
 		}
 		sc := scenarios[idx]
 		if idx != 0 {
-			fmt.Println()
+			fmt.Fprintln(os.Stderr)
 		}
 		scenarioClock.Reset(time.Now())
 		log.Printf("==== Scenario %d: %s ====", idx+1, sc.name)
