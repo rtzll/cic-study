@@ -99,7 +99,14 @@ _Note_: not each progress change shows up on every run (despite 1ms polling).
 
 10. `idx ready=true valid=false progress=<inactive>`
 
-    The CIC session finished but `indisvalid` hasn’t flipped yet.
+    `pg_stat_progress_create_index` drops the entry (so we render `<inactive>`),
+    but the concurrent transaction hasn’t committed, so `indisvalid` still reads
+    false until the final catalog update happens.
+
+11. `idx ready=true valid=true progress=<inactive>`
+
+    The catalog row now reports both flags true, confirming the concurrent build
+    committed cleanly right after the IF NOT EXISTS call released its locks.
 
 ### Index Creation Phases (`pg_stat_progress_create_index.phase`)
 
@@ -164,4 +171,52 @@ _Note_: the phases listed are those observed. A full list can be found in the
 [+6.6009s] [probe] stopping
 [+6.6011s] [writers] stopping
 [+6.8658s] [ready-not-valid] finished with error: ERROR: deadlock detected (SQLSTATE 40P01)
+```
+
+## Example Output of `validation-phase` Run
+
+```
+[+0.0000s] ==== Scenario 5: state: validation phase before commit ====
+[+0.0000s] [validation-phase] starting Postgres 16.8 container
+[+1.5156s] [validation-phase] Postgres up at postgres://u:pw@localhost:33281/db?sslmode=disable
+[+1.5262s] [validation-phase] creating table t
+[+2.6901s] [validation-phase] seed of 1000000 rows completed in 1160.15 ms
+[+2.6902s] [validation-phase] launching CREATE INDEX CONCURRENTLY in background
+[+2.6902s] [validation-phase] waiting for catalog entry that is ready and valid (but CIC not committed)
+[+2.6970s] [probe] started
+[+2.6971s] [cic] started
+[+2.6973s] [writers] started
+[+2.6979s] [probe] insert #01 completed after 0.93 ms
+[+2.6997s] [cic] snapshot updated: idx=<missing> progress=building index: scanning table
+[+2.7003s] [cic] snapshot updated: idx ready=false valid=false progress=building index: scanning table
+[+2.7404s] [cic] snapshot updated: idx ready=false valid=false progress=building index: sorting live tuples
+[+2.7977s] [probe] insert #02 completed after 0.73 ms
+[+2.8975s] [probe] insert #03 completed after 0.55 ms
+[+2.9985s] [probe] insert #04 completed after 1.50 ms
+[+3.0979s] [probe] insert #05 completed after 0.93 ms
+[+3.1976s] [probe] insert #06 completed after 0.62 ms
+[+3.2976s] [probe] insert #07 completed after 0.52 ms
+[+3.3977s] [probe] insert #08 completed after 0.61 ms
+[+3.4995s] [probe] insert #09 completed after 0.31 ms
+[+3.5974s] [probe] insert #10 completed after 0.36 ms
+[+3.6974s] [probe] insert #11 completed after 0.37 ms
+[+3.7983s] [probe] insert #12 completed after 1.29 ms
+[+3.7996s] [cic] snapshot updated: idx ready=false valid=false progress=building index: loading tuples in tree
+[+3.8975s] [probe] insert #13 completed after 0.54 ms
+[+3.9974s] [cic] snapshot updated: idx ready=false valid=false progress=waiting for writers before validation
+[+3.9978s] [probe] insert #14 completed after 0.70 ms
+[+3.9981s] [cic] snapshot updated: idx ready=true valid=false progress=waiting for writers before validation
+[+4.0205s] [cic] snapshot updated: idx ready=true valid=false progress=index validation: scanning index
+[+4.0205s] [validation-phase] IF NOT EXISTS trigger: idx ready=true valid=false
+[+4.0205s] [validation-phase] starting non-concurrent CREATE INDEX IF NOT EXISTS idx
+[+4.0226s] [validation-phase] locks before non-concurrent build: RowExclusiveLock, ShareUpdateExclusiveLock
+[+4.0465s] [cic] snapshot updated: idx ready=true valid=false progress=index validation: sorting tuples
+[+4.0874s] [cic] snapshot updated: idx ready=true valid=false progress=index validation: scanning table
+[+4.1140s] [cic] finished in 1416.86 ms
+[+4.1142s] [validation-phase] non-concurrent build finished in 91.57 ms
+[+4.1144s] [probe] insert #15 completed after 17.41 ms
+[+4.1145s] [cic] snapshot updated: idx ready=true valid=true progress=<inactive>
+[+4.1146s] [validation-phase] locks after non-concurrent build: none
+[+4.1146s] [probe] stopping
+[+4.1147s] [writers] stopping
 ```
