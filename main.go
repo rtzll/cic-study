@@ -21,6 +21,7 @@ import (
 const (
 	indexName       = "idx"
 	tableName       = "t"
+	schemaTableName = "public." + tableName
 	seedCount       = 1_000_000
 	postgresVersion = "16.8"
 
@@ -540,9 +541,8 @@ limit 1`
 	var snap indexSnapshot
 	snap.state = state
 
-	schemaQualified := fmt.Sprintf("public.%s", tableName)
 	var phase string
-	err = db.QueryRow(ctx, progressQuery, schemaQualified).Scan(&phase)
+	err = db.QueryRow(ctx, progressQuery, schemaTableName).Scan(&phase)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return snap, nil
